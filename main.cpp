@@ -14,7 +14,9 @@ Serial device(P0_19,P0_18);
 //Pin Defines
 DigitalOut myled(LED1);
 
-/*
+char moji[32]; //入力文字列
+int count = 0; //文字数カウンタ
+
 DigitalOut coilEN1(P0_1);
 DigitalOut coilEN2(P0_2);
 DigitalOut coilEN3(P0_3);
@@ -35,15 +37,14 @@ DigitalOut SHDNn(P1_15);
 AnalogIn AD_TRANS_IN(P0_11);
 AnalogIn AD_CT_IN(P0_12);
 
-SPI POT_SPI(P0_9, P0_8, P0_6);
-*/
-
-
+SPI spi(P0_9, P0_8, P0_6);
+    
 void setup() {
+//    spi.format(8,3);
+//    spi.frequency(1000000);  
     device.baud(115200);
 
-/*    POT_SPI.format(8, 3);
-    POT_SPI.frequency(1000000); 
+
 
     coilEN1 = 0;
     coilEN2 = 0;
@@ -61,7 +62,6 @@ void setup() {
     SCT_AMP = 0;
     WLATn = 1;
     SHDNn = 0;
-*/
 
     wait(0.5);
     serial.printf("Hello World!\r\n");
@@ -75,9 +75,6 @@ void helpwrite(){
 }
 
 void serial_inout(){
-    char moji[32]; //入力文字列
-    int count = 0; //文字数カウンタ
-
     if(serial.readable()) {    // 受信確認
     moji[count] = serial.getc();        //キーボード入力文字を1文字ずつmojiに代入
     serial.printf("%c(%d)", moji[count],count);   //シリアル出力表示
@@ -88,7 +85,7 @@ void serial_inout(){
         serial.printf("\r\nERR!\r\n");
         }
 
-       // else if(moji[0] == '\n'){count = 0;}
+        else if(moji[0] == '\n'){count = 0;}
     
         else if((moji[count] == '\r')) {       // ②CRを受信した場合
             moji[count] = '\0';                                         // 末尾に終端文字を入れる
