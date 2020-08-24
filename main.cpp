@@ -38,13 +38,12 @@ AnalogIn AD_TRANS_IN(P0_11);
 AnalogIn AD_CT_IN(P0_12);
 
 SPI spi(P0_9, P0_8, P0_6);
-    
+
 void setup() {
-//    spi.format(8,3);
-//    spi.frequency(1000000);  
+    spi.format(16,0);
+    wait(1);
+    spi.frequency(1000000);  
     device.baud(115200);
-
-
 
     coilEN1 = 0;
     coilEN2 = 0;
@@ -62,16 +61,52 @@ void setup() {
     SCT_AMP = 0;
     WLATn = 1;
     SHDNn = 0;
+}
 
+void serialstart(){
     wait(0.5);
     serial.printf("Hello World!\r\n");
-    wait(0.5);  
+    wait(0.5);
 }
 
 void helpwrite(){
     serial.printf("\r\ncmd");
     serial.printf("\r\nhelp");
     serial.printf("\r\nOK");
+}
+
+void TCON(){
+        int whoami = spi.write(0x40FF); 
+        serial.printf("\r\nWHOAMI register = 0x%X\r\n", whoami);
+}
+
+void TCONread(){
+        int whoami = spi.write(0x4C00);
+        serial.printf("\r\nWHOAMI register = 0x%X\r\n", whoami);
+}
+
+void read(){
+        int whoami = spi.write(0x0C00);
+        serial.printf("\r\nWHOAMI register = 0x%X\r\n", whoami);
+}
+
+void write(){
+        int whoami = spi.write(0x00FF);
+        serial.printf("\r\nWHOAMI register = 0x%X\r\n", whoami);
+}
+
+void WLAT(){
+        WLATn = 0;
+        wait(0.1);
+        WLATn = 1;
+}
+
+void CSn(){
+        ENn = 0;
+}
+
+void CSp(){
+        ENn = 1;
 }
 
 void serial_inout(){
@@ -101,7 +136,12 @@ void serial_inout(){
             else if(strcmp(moji, "trans_adj") == 0){helpwrite();}
             else if(strcmp(moji, "ct1_adj") == 0){helpwrite();}
             else if(strcmp(moji, "ct2_adj") == 0){helpwrite();}
-            else serial.printf("\r\nNG %c %d", moji, count);
+            else if(strcmp(moji, "TCON") == 0){TCON();}
+            else if(strcmp(moji, "TCONread") == 0){TCONread();}
+            else if(strcmp(moji, "read") == 0){read();}
+            else if(strcmp(moji, "write") == 0){write();}
+            else if(strcmp(moji, "WLAT") == 0){WLAT();}
+            else serial.printf("\r\nNG");
         }
     
         else count++;                                                   // 文字カウンタに1加算
@@ -112,7 +152,8 @@ void serial_inout(){
 // main Program
 int main() {
     setup();
-        
+    serialstart();
+    
     myled = 1;
 
     while(1){
