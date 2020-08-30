@@ -27,7 +27,7 @@ int wa;
     int *pmode;
 float Vcc = 3.292; //実測値を入力すること
 float Vref;
-    float ActualVref[3] = {1.65, 1.65, 1.65};
+    float ActualVref[4] = {1.65, 1.65, 1.65, 1.65};
     float *pAVrefcal;
 int AD_flag;
 float AD_val = 0;
@@ -107,7 +107,11 @@ void helpwrite(){
     serial.printf("\r\nCT1_OUT_ADINT");
     serial.printf("\r\nCT2_OUT_ADINT");
     serial.printf("\r\nTRANS_OUT_EXT");    
-    serial.printf("\r\nCT_OUT_EXT");      
+    serial.printf("\r\nCT_OUT_EXT");
+    serial.printf("\r\nTRANS_offset");
+    serial.printf("\r\nCT1_offset");
+    serial.printf("\r\nCT2_offset");
+    serial.printf("\r\ndispVref");  
     serial.printf("\r\nTRANS_ADJ");       
     serial.printf("\r\nCT1_ADJ");         
     serial.printf("\r\nCT2_ADJ");         
@@ -283,7 +287,7 @@ void AD(int ad){
             AD_Val_f = AD_CT_IN.read();
             }
         wait(0.02);
-        serial.printf("\r\nAD_Val : %1f [V] / (%d)d / (%x)h",(AD_Val*Vcc/1023),AD_Val,AD_Val);
+        serial.printf("\r\nAD_Val   : %1f [V] / (%d)d / (%x)h",(AD_Val*Vcc/1023),AD_Val,AD_Val);
         serial.printf("\r\nAD_Val_f : %1f [V] / (%f)d",(AD_Val_f*Vcc),AD_Val_f);
 }
 
@@ -389,13 +393,15 @@ void initial(){
     
     coilEN2 = 1;    //TRANS_OUT出力
     coilEN3 = 1;    //CT1,2_OUT出力
- 
+    coilEN4 = 0;
+
+/* 
     for(int i=0; i<10*2; i++){
         led1 = !led1;
         wait(0.1);
         }
     led1 = 0;
-
+*/
     serial.printf("\r\n OK(initial)");
 }
 
@@ -722,8 +728,8 @@ void offsetcal(int mode){
         else if(AD_count < 98 && AD_flag == 0){}    //サンプリング数0~Nで、サンプル取得されてないとき
         else{                                       //サンプリング完了時
             Vref = AD_val_sum / AD_count;
-            serial.printf("\r\n Vref = %f",Vref);
             ActualVref[mode_p] = Vref;              //格納
+            serial.printf("\r\n Vref%d = %f",mode_p,ActualVref[mode_p]);
             break;
         }
     }
@@ -731,8 +737,10 @@ void offsetcal(int mode){
     led1 = 0;
 }
 
-void ActVref1(){
-    serial.printf("\r\n ActualVref[0] = %f", *pAVrefcal);
+void dispVref(){
+    serial.printf("\r\n TRANS_Vref = %f",ActualVref[1]);
+    serial.printf("\r\n CT1___Vref = %f",ActualVref[2]);
+    serial.printf("\r\n CT2___Vref = %f",ActualVref[3]);
 }
 /******************************************************************************/
 //タイマー割込み
@@ -741,8 +749,8 @@ void ActVref1(){
 //タイマー割込み実行関数
 void timerAD(){
     led1 = !led1;
-    serial.printf("\r\n mode_p = %d",mode_p);
-    serial.printf("\r\n ActualVref = %f",ActualVref[mode_p]);
+    //serial.printf("\r\n mode_p = %d",mode_p);
+    //serial.printf("\r\n ActualVref = %f",ActualVref[mode_p]);
     
     if(mode_p == 1){AD_val = AD_TRANS_IN.read();}
     else if(mode_p==2 || mode_p==3){AD_val = AD_CT_IN.read();}         
@@ -960,7 +968,7 @@ void auto_adj(int mode){
             serial.printf("\r\n quit");
             break; //ループ2ブレイク
         }
-        else if(adjcount >= 20){    //ループ2上限値
+        else if(adjcount >= 15){    //ループ2上限値
             serial.printf("\r\n\r\n ERROR!\r\n");
             break; //ループ2ブレイク
         }
@@ -1006,6 +1014,24 @@ void auto_adj(int mode){
     serial.printf("\r\n ADJ END");
 }
 
+void Vswitch(int a){
+    coilEN5 = a;
+    serial.printf("\r\n OK");
+}
+void Fswitch(int a){
+    coilEN1 = a;
+    serial.printf("\r\n OK");
+}
+void Tswitch(int a){
+    coilEN2 = a;
+    serial.printf("\r\n OK");
+}
+void Cswitch(int a,int b){
+    coilEN3 = a;
+    coilEN4 = b;
+    serial.printf("\r\n OK");
+}
+
 /******************************************************************************/
 //シリアル入力受付 [メイン]
 /******************************************************************************/
@@ -1030,18 +1056,21 @@ void serial_inout(){
             else if(strcmp(moji, "help") == 0){helpwrite();}                        //コマンド一覧表示
             else if(strcmp(moji, "?") == 0){helpwrite();}                           //コマンド一覧表示
             else if(strcmp(moji, "initial") == 0){initial();}                       //初期化
-            else if(strcmp(moji, "V_OFF") == 0){coilEN5 = 0;}                       //±5V,±15Vオフ
-            else if(strcmp(moji, "V_ON") == 0){coilEN5 = 1;}                        //±5V,±15Vオン
-            else if(strcmp(moji, "50Hz") == 0){coilEN1 = 0;}                        //周波数切替
-            else if(strcmp(moji, "60Hz") == 0){coilEN1 = 1;}                        //周波数切替
-            else if(strcmp(moji, "TRANS_OUT_ADINT") == 0){coilEN2 = 0;}             //TRANS_OUT内部AD入力
-            else if(strcmp(moji, "TRANS_OUT_EXT") == 0){coilEN2 = 1;}               //TRANS_OUT外部出力
-            else if(strcmp(moji, "CT1_OUT_ADINT") == 0){coilEN3 = 0; coilEN4 = 0;}  //CT1_OUT内部AD入力
-            else if(strcmp(moji, "CT1_OUT_ADINT") == 0){coilEN3 = 0; coilEN4 = 1;}  //CT2_OUT内部AD入力
-            else if(strcmp(moji, "CT_OUT_EXT") == 0){coilEN3 = 1;}                  //CT1,2_OUT外部出力
-            else if(strcmp(moji, "offset1") == 0){offsetcal(1);}                    //TRANS_OUT ADオフセット補正
-            else if(strcmp(moji, "offset2") == 0){offsetcal(2);}                    //CT1_OUT ADオフセット補正
-            else if(strcmp(moji, "offset3") == 0){offsetcal(3);}                    //CT2_OUT ADオフセット補正
+            
+            else if(strcmp(moji, "V_OFF") == 0){Vswitch(0);}                        //±5V,±15Vオフ
+            else if(strcmp(moji, "V_ON") == 0){Vswitch(1);}                         //±5V,±15Vオン
+            else if(strcmp(moji, "50Hz") == 0){Fswitch(0);}                         //周波数切替
+            else if(strcmp(moji, "60Hz") == 0){Fswitch(1);}                         //周波数切替
+            else if(strcmp(moji, "TRANS_OUT_ADINT") == 0){Tswitch(0);}              //TRANS_OUT内部AD入力
+            else if(strcmp(moji, "TRANS_OUT_EXT") == 0){Tswitch(1);}                //TRANS_OUT外部出力
+            else if(strcmp(moji, "CT1_OUT_ADINT") == 0){Cswitch(0,0);}              //CT1_OUT内部AD入力
+            else if(strcmp(moji, "CT2_OUT_ADINT") == 0){Cswitch(0,1);}              //CT2_OUT内部AD入力
+            else if(strcmp(moji, "CT_OUT_EXT") == 0){Cswitch(1,0);}                 //CT1,2_OUT外部出力
+            
+            else if(strcmp(moji, "TRANS_offset") == 0){offsetcal(1);}               //TRANS_OUT ADオフセット補正
+            else if(strcmp(moji, "CT1_offset") == 0){offsetcal(2);}                 //CT1_OUT ADオフセット補正
+            else if(strcmp(moji, "CT2_offset") == 0){offsetcal(3);}                 //CT2_OUT ADオフセット補正
+            else if(strcmp(moji, "dispVref") == 0){dispVref();}                     //各Vref表示
             else if(strcmp(moji, "TRANS_ADJ") == 0){auto_adj(1);}                   //TRANS_OUT調整モードに移行
             else if(strcmp(moji, "CT1_ADJ") == 0){auto_adj(2);}                     //CT1_OUT調整モードに移行
             else if(strcmp(moji, "CT2_ADJ") == 0){auto_adj(3);}                     //CT2_OUT調整モードに移行
@@ -1069,10 +1098,7 @@ void serial_inout(){
             else if(strcmp(moji, "AD1_Vrms") == 0){ADVrms(1);}
             else if(strcmp(moji, "AD2_Vrms") == 0){ADVrms(2);}
             else if(strcmp(moji, "AD3_Vrms") == 0){ADVrms(3);}
-            else if(strcmp(moji, "ActVref1") == 0){ActVref1();}
-            
-
-            
+                   
             else serial.printf("\r\n\r\n NG!\r\n");
         }
         else count++;        // 文字カウンタに1加算
@@ -1090,13 +1116,19 @@ int main() {
     wait(0.2);
     setup();
     initial();
+    offsetcal(1);
+    offsetcal(2);
+    offsetcal(3);
+    led1 = 1;
+    coilEN2 = 1;    //TRANS_OUT出力
+    coilEN3 = 1;    //CT1,2_OUT出力
+    coilEN4 = 0;
+    led1 = 0;
     serialstart();
     
 //*(volatile int *)0x4004402C = 0x2;  //  (レジスタ値を直接入力) アドレス0x4004402Cに値を代入
 //*(volatile int *)0x4004402C;
 //serial.printf( "data in 0x4004402C is 0x%08X\n", *(volatile int *)0x4004402C );  //  アドレス0x4004402Cの値を表示
-
-//timerint.attach(&attime,0.1);
   
     while(1){
         serial_inout();
