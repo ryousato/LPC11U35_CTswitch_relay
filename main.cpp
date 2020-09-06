@@ -948,7 +948,7 @@ void auto_adj(int mode, float setval){
             if(CTrange == 0) {  //60Aのとき
                 //粗・微 調整判定
                 float diffref_C = 0.001966 / 255 * read_val_Fine + 0.00885;
-                float diffref_F = 0.001966 / 255 * read_val_Coarse + 0.000145;
+                float diffref_F = 0.001966 / 255 * read_val_Coarse + 0.0001;
                 float diffcom = diffref_C * 1.5;
                 //serial.printf("\r\n diffref_C = %f",diffref_C);
                 //serial.printf("\r\n diffref_F = %f",diffref_F);
@@ -973,7 +973,7 @@ void auto_adj(int mode, float setval){
             } else if(CTrange == 1) { //120Aのとき
                 //粗・微 調整判定
                 float diffref_C = 0.000983 / 255 * read_val_Fine + 0.0044;
-                float diffref_F = 0.000983 / 255 * read_val_Coarse + 0.0000993;
+                float diffref_F = 0.000983 / 255 * read_val_Coarse + 0.000049;
                 float diffcom = diffref_C * 1.5;
                 //serial.printf("\r\n diffref_C = %f",diffref_C);
                 //serial.printf("\r\n diffref_F = %f",diffref_F);
@@ -1253,9 +1253,9 @@ void auto_adj_mode(int mode){
                 float diffref_C = 0.000983 / 255 * read_val_Fine + 0.0044;
                 float diffref_F = 0.000983 / 255 * read_val_Coarse + 0.0000993;
                 float diffcom = diffref_C * 1.5;
-                serial.printf("\r\n diffref_C = %f",diffref_C);
-                serial.printf("\r\n diffref_F = %f",diffref_F);
-                serial.printf("\r\n diffcom = %f",diffcom);
+                //serial.printf("\r\n diffref_C = %f",diffref_C);
+                //serial.printf("\r\n diffref_F = %f",diffref_F);
+                //serial.printf("\r\n diffcom = %f",diffcom);
                 if(diff >= diffcom){CorF = 2;} //粗
                 else if(diff < diffcom){
                     CorF = 1;               //微
