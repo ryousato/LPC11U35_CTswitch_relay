@@ -25,6 +25,8 @@ int incr;
 int wa;
     int mode_p = 0;
     int *pmode;
+    int CTrange;        //[60A:120A] [0:1]
+    int *pCTrange;
 float Vcc = 3.292; //実測値を入力すること
 float Vref;
     float ActualVref[4] = {1.65, 1.65, 1.65, 1.65};
@@ -84,6 +86,7 @@ void setup() {
 
     WLATn = 1;      //MCP41HV51-503EST ワイパーラッチ
     SCT_AMP = 0;    //CT入力アンプ 60Aレベル切替え
+    CTrange = 0;
     SHDNn = 1;      //電流帰還アンプ シャットダウンしない
 }
 
@@ -108,13 +111,18 @@ void helpwrite(){
     serial.printf("\r\nCT2_OUT_ADINT");
     serial.printf("\r\nTRANS_OUT_EXT");    
     serial.printf("\r\nCT_OUT_EXT");
+    serial.printf("\r\nCTrange_60A");
+    serial.printf("\r\nCTrange_120A");
     serial.printf("\r\nTRANS_offset");
     serial.printf("\r\nCT1_offset");
     serial.printf("\r\nCT2_offset");
     serial.printf("\r\ndispVref");  
-    serial.printf("\r\nTRANS_ADJ");       
-    serial.printf("\r\nCT1_ADJ");         
-    serial.printf("\r\nCT2_ADJ");         
+    serial.printf("\r\nTRANS_ADJ_100V");
+    serial.printf("\r\nCT1_ADJ_60A");
+    serial.printf("\r\nCT2_ADJ_60A");
+    serial.printf("\r\nTRANS_ADJ_MODE");       
+    serial.printf("\r\nCT1_ADJ_MODE");         
+    serial.printf("\r\nCT2_ADJ_MODE");         
     serial.printf("\r\nMANUAL_TRANS_ADJ");
     serial.printf("\r\nMANUAL_CT1_ADJ");  
     serial.printf("\r\nMANUAL_CT2_ADJ");  
@@ -347,6 +355,7 @@ void initial(){
     coilEN1 = 0;    //50Hz切替え
     
     SCT_AMP = 0;    //CT入力アンプ 60Aレベル切替え
+    CTrange = 0;
     SHDNn = 1;      //電流帰還アンプ シャットダウンしない
     
     //TRANS_OUT初期設定
@@ -354,10 +363,10 @@ void initial(){
     
     ADDR(2);        //TRANS粗調整POT
     spi.write(0x0076);
-    read();
+    //read();
     ADDR(1);        //TRANS微調整POT
     spi.write(0x007F);
-    read();
+    //read();
     WLAT();         //設定したワイパーをラッチ
     wait(0.02);
     ENn = 1;        //CSをディセーブル
@@ -368,10 +377,10 @@ void initial(){
     
     ADDR(4);        //CT1粗調整POT
     spi.write(0x006B);
-    read();
+    //read();
     ADDR(3);        //CT1微調整POT
     spi.write(0x007F);
-    read();
+    //read();
     WLAT();         //設定したワイパーをラッチ
     wait(0.02);
     ENn = 1;        //CSをディセーブル
@@ -383,10 +392,10 @@ void initial(){
     POTini(3);
     ADDR(6);        //CT2粗調整POT
     spi.write(0x006B);
-    read();
+    //read();
     ADDR(5);        //CT2微調整POT
     spi.write(0x007F);
-    read();
+    //read();
     WLAT();         //設定したワイパーをラッチ
     wait(0.02);
     ENn = 1;        //CSをディセーブル
@@ -429,9 +438,11 @@ void manual_adj(int mode){
                     count = 0;                                                  //文字カウンタをリセット
                     if     (strcmp(moji, "60A") == 0){
                         SCT_AMP = 0;        //CT入力アンプ 60Aレベル切替え
+                        CTrange = 0;
                         break;}
                     else if(strcmp(moji, "120A") == 0){
                         SCT_AMP = 1;        //CT入力アンプ 120Aレベル切替え
+                        CTrange = 1;
                         break;}
                     else serial.printf("\r\n\r\n NG!\r\n");
                     }
@@ -723,7 +734,7 @@ void offsetcal(int mode){
             if(AD_count == 0){timecount.start();} //0~Nのサンプリング時間計測用スタート時
             else if(AD_count == 250){        //0~Nのサンプリング時間計測用ストップ時
                 timecount.stop();
-                serial.printf("\r\n t = %f",timecount.read());  //計測時間表示
+                //serial.printf("\r\n t = %f",timecount.read());  //計測時間表示
                 timecount.reset();
             }
         }
@@ -823,14 +834,193 @@ void att(int mode){
 void det(){timerint.detach();}
 
 /******************************************************************************/
-//自動調整
+//自動調整(コマンド)
 //TRANS_OUT設定範囲 : AC 50~138V
 //CT1,2_OUT設定範囲 : AC 10~120A
 /******************************************************************************/
-void auto_adj(int mode){
-
-    int CTrange = 0;    //[60A:120A] [0:1]
+void auto_adj(int mode, float setval){
     
+    int adjnum = 0; //コマンド判定フラグ
+    
+    //設定範囲判定 と Vrms換算
+    if(mode == 1) {
+        if(setval >= 50 && setval <= 138) {
+            setval = setval * 0.12 * 0.196078;  //0.12:トランス比 0.196078:分圧抵抗比
+            //serial.printf("\r\n %f",setval);
+            setval /= 2;
+            setval /= sqrtf(2);
+            serial.printf("\r\n setval = %f",setval);
+        } else {
+            serial.printf("\r\n\r\n NG!\r\n");
+            adjnum = 1;
+        }
+    } else if(mode==2 || mode==3) {
+        if(setval >= 10 && setval <= 120) {
+            if(setval >= 61 && setval <= 120) {
+                SCT_AMP = 1;
+                CTrange = 1;
+            }
+            if(CTrange == 0) {
+                setval = setval / 3000 * 10 * 5.666667;  //3000:CT比 10:終端抵抗 5.666667:分圧抵抗比
+            } else if(CTrange == 1) {
+                setval = setval / 3000 * 10 * 2.833333;  //3000:CT比 10:終端抵抗 2.833333:分圧抵抗比
+            }
+            serial.printf("\r\n setval = %f",setval);
+        } else {
+            serial.printf("\r\n\r\n NG!\r\n");
+            adjnum = 1;
+        }
+    } else {
+        serial.printf("\r\n\r\n NG!\r\n");
+        adjnum = 1;
+    }
+
+    int adjcount = 0; //ループ2上限変数
+
+    while(1) { //ループ2
+        if(adjnum == 1) {
+            serial.printf("\r\n\r\n COMMAND ERROR!");
+            break; //ループ2ブレイク
+        } else if(adjcount >= 15) { //ループ2上限値
+            serial.printf("\r\n\r\n ERROR!\r\n");
+            break; //ループ2ブレイク
+        }
+
+        ADVrms(mode);   //現在のVrms値
+
+        diff = setval - Vrms;   //差分
+        //serial.printf("\r\n diff = %f",diff);
+
+        //増減方向判定
+        if(diff > 0) {
+            incr = 1;   //増
+        } else if(diff < 0) {
+            incr = 0;           //減
+            diff *= -1;         //絶対値
+        } else if(diff == 0) {
+            break;   //差分無し ループ2ブレイク
+        }
+        serial.printf("\r\n diff = %f",diff);
+        serial.printf("\r\n incr = %d",incr);
+
+
+        //粗、微　読み取り
+        ADDR(mode * 2);             //TRANS粗調整POT
+        int read_val_Coarse = spi.write(0x0C00);
+        read_val_Coarse &= 0x00FF;
+
+        wait(0.001);
+
+        ADDR(mode * 2 - 1);         //TRANS微調整POT
+        int read_val_Fine = spi.write(0x0C00);
+        read_val_Fine &= 0x00FF;
+
+        //serial.printf("\r\n read_val_Coarse = %d",read_val_Coarse);
+        //serial.printf("\r\n read_val_Fine = %d",read_val_Fine);
+
+
+        if(mode == 1) {
+            //粗・微 調整判定
+            float diffref_C = 0.000412 / 255 * read_val_Fine + 0.0032;
+            float diffref_F = 0.000412 / 255 * read_val_Coarse + 0.000165;
+            float diffcom = diffref_C * 1.5;
+            //serial.printf("\r\n diffref_C = %f",diffref_C);
+            //serial.printf("\r\n diffref_F = %f",diffref_F);
+            //serial.printf("\r\n diffcom = %f",diffcom);
+            if(diff >= diffcom) {
+                CorF = 2;   //粗
+            } else if(diff < diffcom) {
+                CorF = 1;               //微
+                if(diff < 0.001) {
+                    break;   //差分微小 ループ2ブレイク(通常最終ゴール)
+                }
+            }
+            serial.printf("\r\n CorF = %d",CorF);
+
+            //調整tap値算出
+            if(CorF == 2) {
+                val = diff / diffref_C;
+            } else if(CorF == 1) {
+                val = diff / diffref_F;
+            }
+            serial.printf("\r\n tap(val) = %d",val);
+        } else if(mode==2 || mode==3) {
+            if(CTrange == 0) {  //60Aのとき
+                //粗・微 調整判定
+                float diffref_C = 0.001966 / 255 * read_val_Fine + 0.00885;
+                float diffref_F = 0.001966 / 255 * read_val_Coarse + 0.000145;
+                float diffcom = diffref_C * 1.5;
+                //serial.printf("\r\n diffref_C = %f",diffref_C);
+                //serial.printf("\r\n diffref_F = %f",diffref_F);
+                //serial.printf("\r\n diffcom = %f",diffcom);
+                if(diff >= diffcom) {
+                    CorF = 2;   //粗
+                } else if(diff < diffcom) {
+                    CorF = 1;               //微
+                    if(diff < 0.002) {
+                        break;   //差分微小 ループ2ブレイク(通常最終ゴール)
+                    }
+                }
+                serial.printf("\r\n CorF = %d",CorF);
+
+                //調整tap値算出
+                if(CorF == 2) {
+                    val = diff / diffref_C;
+                } else if(CorF == 1) {
+                    val = diff / diffref_F;
+                }
+                serial.printf("\r\n tap(val) = %d",val);
+            } else if(CTrange == 1) { //120Aのとき
+                //粗・微 調整判定
+                float diffref_C = 0.000983 / 255 * read_val_Fine + 0.0044;
+                float diffref_F = 0.000983 / 255 * read_val_Coarse + 0.0000993;
+                float diffcom = diffref_C * 1.5;
+                //serial.printf("\r\n diffref_C = %f",diffref_C);
+                //serial.printf("\r\n diffref_F = %f",diffref_F);
+                //serial.printf("\r\n diffcom = %f",diffcom);
+                if(diff >= diffcom) {
+                    CorF = 2;   //粗
+                } else if(diff < diffcom) {
+                    CorF = 1;               //微
+                    if(diff < 0.002) {
+                        break;   //差分微小 ループ2ブレイク(通常最終ゴール)
+                    }
+                }
+                serial.printf("\r\n CorF = %d",CorF);
+
+                //調整tap値算出
+                if(CorF == 2) {
+                    val = diff / diffref_C;
+                } else if(CorF == 1) {
+                    val = diff / diffref_F;
+                }
+                serial.printf("\r\n tap(val) = %d",val);
+            }
+        }
+        //ワイパー位置移動
+        incdec(incr, val, CorF, mode);
+
+        adjcount ++;
+
+    } //ループ2
+
+    if(mode==1) {
+        coilEN2 = 1;   //TRANS_OUTを外部出力へ切替え
+    } else if(mode==2 || mode==3) {
+        coilEN3 = 1;    //CT1_OUT1と2を外部出力へ切替え
+        coilEN4 = 0;
+    }
+
+    serial.printf("\r\n ADJ END");
+}
+
+/******************************************************************************/
+//自動調整(モード)
+//TRANS_OUT設定範囲 : AC 50~138V
+//CT1,2_OUT設定範囲 : AC 10~120A
+/******************************************************************************/
+void auto_adj_mode(int mode){    
+
 ///////////////////////////////////////////////////////////////////////////////
     POTini(mode);   //POTを初期値に設定
 ///////////////////////////////////////////////////////////////////////////////
@@ -1049,7 +1239,7 @@ void auto_adj(int mode){
                 if(diff >= diffcom){CorF = 2;} //粗
                 else if(diff < diffcom){
                     CorF = 1;               //微
-                    if(diff < 0.001){break;}//差分微小 ループ2ブレイク(通常最終ゴール)
+                    if(diff < 0.002){break;}//差分微小 ループ2ブレイク(通常最終ゴール)
                 }
                 serial.printf("\r\n CorF = %d",CorF);
         
@@ -1069,7 +1259,7 @@ void auto_adj(int mode){
                 if(diff >= diffcom){CorF = 2;} //粗
                 else if(diff < diffcom){
                     CorF = 1;               //微
-                    if(diff < 0.001){break;}//差分微小 ループ2ブレイク(通常最終ゴール)
+                    if(diff < 0.002){break;}//差分微小 ループ2ブレイク(通常最終ゴール)
                 }
                 serial.printf("\r\n CorF = %d",CorF);
         
@@ -1111,6 +1301,7 @@ void Cswitch(int a,int b){
 }
 void Rswitch(int a){
     SCT_AMP = a;
+    CTrange = a;
     serial.printf("\r\n OK");
 }
 
@@ -1155,9 +1346,12 @@ void serial_inout(){
             else if(strcmp(moji, "CT1_offset") == 0){offsetcal(2);}                 //CT1_OUT ADオフセット補正
             else if(strcmp(moji, "CT2_offset") == 0){offsetcal(3);}                 //CT2_OUT ADオフセット補正
             else if(strcmp(moji, "dispVref") == 0){dispVref();}                     //各Vref表示
-            else if(strcmp(moji, "TRANS_ADJ") == 0){auto_adj(1);}                   //TRANS_OUT調整モードに移行
-            else if(strcmp(moji, "CT1_ADJ") == 0){auto_adj(2);}                     //CT1_OUT調整モードに移行
-            else if(strcmp(moji, "CT2_ADJ") == 0){auto_adj(3);}                     //CT2_OUT調整モードに移行
+            else if(strcmp(moji, "TRANS_ADJ_100V") == 0){auto_adj(1,100);}          //TRANS_OUTを設定
+            else if(strcmp(moji, "CT1_ADJ_60A") == 0){auto_adj(2,60);}              //CT1を設定
+            else if(strcmp(moji, "CT2_ADJ_60A") == 0){auto_adj(3,60);}              //CT2を設定
+            else if(strcmp(moji, "TRANS_ADJ_MODE") == 0){auto_adj_mode(1);}         //TRANS_OUT調整モードに移行
+            else if(strcmp(moji, "CT1_ADJ_MODE") == 0){auto_adj_mode(2);}           //CT1_OUT調整モードに移行
+            else if(strcmp(moji, "CT2_ADJ_MODE") == 0){auto_adj_mode(3);}           //CT2_OUT調整モードに移行
             else if(strcmp(moji, "MANUAL_TRANS_ADJ") == 0){manual_adj(1);}          //TRANS_OUT手動調整モードに移行
             else if(strcmp(moji, "MANUAL_CT1_ADJ") == 0){manual_adj(2);}            //CT1_OUT手動調整モードに移行
             else if(strcmp(moji, "MANUAL_CT2_ADJ") == 0){manual_adj(3);}            //CT1_OU2手動調整モードに移行
@@ -1202,7 +1396,8 @@ void serial_inout(){
 int main() {
     pAVrefcal = &ActualVref[0];
     pmode = &mode_p;
-    
+    pCTrange = &CTrange;
+        
     led1 = 1;
     wait(0.2);
     setup();
@@ -1210,7 +1405,9 @@ int main() {
     offsetcal(1);
     offsetcal(2);
     offsetcal(3);
-    led1 = 1;
+    auto_adj(1,100);
+    auto_adj(2,60);
+    auto_adj(3,60);
     coilEN2 = 1;    //TRANS_OUT出力
     coilEN3 = 1;    //CT1,2_OUT出力
     coilEN4 = 0;
