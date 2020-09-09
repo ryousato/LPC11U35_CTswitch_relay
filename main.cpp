@@ -114,8 +114,8 @@ void helpwrite(){
     serial.printf("\r\nCTrange_60A");
     serial.printf("\r\nCTrange_120A");
     serial.printf("\r\nTRANS_offset");
-    serial.printf("\r\nCT1_offset");
-    serial.printf("\r\nCT2_offset");
+    serial.printf("\r\nCT_offset");
+//    serial.printf("\r\nCT2_offset");
     serial.printf("\r\ndispVref");  
     serial.printf("\r\nTRANS_ADJ_100V");
     serial.printf("\r\nCT1_ADJ_60A");
@@ -714,9 +714,9 @@ void offsetcal(int mode){
     AD_val_sum = 0;
 
     mode_p = mode;
-    if(mode == 1){coilEN2 = 0;}                     //TRANS_OUTをAD入力方向へ切替え
-    else if(mode == 2){coilEN3 = 0; coilEN4 = 0;}   //CT1_OUT1と2をAD入力方向へ切替え
-    else if(mode == 3){coilEN3 = 0; coilEN4 = 1;}   //CT1_OUT1と2をAD入力方向へ切替え
+    if(mode == 1){coilEN2 = 1;}                     //TRANS_OUTを出力方向へ切替え
+    else if(mode == 2){coilEN3 = 1;}   //CT1_OUT1と2を出力方向へ切替え
+    else if(mode == 3){coilEN3 = 1;}   //CT1_OUT1と2を出力方向へ切替え
 
     wait(0.05);
     
@@ -742,6 +742,7 @@ void offsetcal(int mode){
         else{                                       //サンプリング完了時
             Vref = AD_val_sum / AD_count;
             ActualVref[mode_p] = Vref;              //格納
+            if(mode_p == 2){ActualVref[3] = Vref;}
             serial.printf("\r\n Vref%d = %f",mode_p,ActualVref[mode_p]);
             break;
         }
@@ -752,8 +753,8 @@ void offsetcal(int mode){
 
 void dispVref(){
     serial.printf("\r\n TRANS_Vref = %f",ActualVref[1]);
-    serial.printf("\r\n CT1___Vref = %f",ActualVref[2]);
-    serial.printf("\r\n CT2___Vref = %f",ActualVref[3]);
+    serial.printf("\r\n    CT_Vref = %f",ActualVref[2]);
+//    serial.printf("\r\n CT2___Vref = %f",ActualVref[3]);
 }
 /******************************************************************************/
 //タイマー割込み
@@ -1343,8 +1344,8 @@ void serial_inout(){
             else if(strcmp(moji, "CTrange_120A") == 0){Rswitch(0);}                 //CT入力アンプゲイン120A    
             
             else if(strcmp(moji, "TRANS_offset") == 0){offsetcal(1);}               //TRANS_OUT ADオフセット補正
-            else if(strcmp(moji, "CT1_offset") == 0){offsetcal(2);}                 //CT1_OUT ADオフセット補正
-            else if(strcmp(moji, "CT2_offset") == 0){offsetcal(3);}                 //CT2_OUT ADオフセット補正
+            else if(strcmp(moji, "CT_offset") == 0){offsetcal(2);}                  //CT_OUT ADオフセット補正
+//            else if(strcmp(moji, "CT2_offset") == 0){offsetcal(3);}                 //CT2_OUT ADオフセット補正
             else if(strcmp(moji, "dispVref") == 0){dispVref();}                     //各Vref表示
             else if(strcmp(moji, "TRANS_ADJ_100V") == 0){auto_adj(1,100);}          //TRANS_OUTを設定
             else if(strcmp(moji, "CT1_ADJ_60A") == 0){auto_adj(2,60);}              //CT1を設定
@@ -1404,7 +1405,7 @@ int main() {
     initial();
     offsetcal(1);
     offsetcal(2);
-    offsetcal(3);
+//    offsetcal(3);
     auto_adj(1,100);
     auto_adj(2,60);
     auto_adj(3,60);
